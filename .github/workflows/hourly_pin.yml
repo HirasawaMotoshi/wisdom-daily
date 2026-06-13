@@ -36,8 +36,9 @@ jobs:
           mkdir -p fonts
           if [ ! -f fonts/Inter-Bold.ttf ]; then
             curl -fsSL \
-              "https://github.com/rsms/inter/raw/master/docs/font-files/Inter-Bold.ttf" \
-              -o fonts/Inter-Bold.ttf
+              "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bslnt%2Cwght%5D.ttf" \
+              -o fonts/Inter-Bold.ttf || \
+            apt-get install -y fonts-dejavu-core 2>/dev/null || true
           fi
 
       - name: Run quote poster
