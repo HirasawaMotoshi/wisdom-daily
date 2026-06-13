@@ -35,7 +35,7 @@ GEMINI_API_KEY       = os.getenv("GEMINI_API_KEY", "")
 HF_API_TOKEN         = os.getenv("HF_API_TOKEN", "")
 PINTEREST_TOKEN      = os.getenv("PINTEREST_ACCESS_TOKEN", "")
 PINTEREST_BOARD_ID   = os.getenv("PINTEREST_BOARD_ID", "")
-GITHUB_PAGES_BASE    = os.getenv("GITHUB_PAGES_BASE_URL", "").rstrip("/")
+GITHUB_PAGES_BASE    = os.getenv("PAGES_BASE_URL", "").rstrip("/")
 GITHUB_REPO          = os.getenv("GITHUB_REPOSITORY", "")   # owner/repo
 
 # HF モデル（無料の Inference API で動く軽量モデル）
