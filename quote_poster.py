@@ -89,13 +89,20 @@ def generate_quote() -> dict[str, str]:
         }
     """)
 
-    resp = requests.post(
-        f"{GEMINI_TEXT_URL}?key={GEMINI_API_KEY}",
-        headers={"Content-Type": "application/json"},
-        json={"contents": [{"parts": [{"text": prompt}]}]},
-        timeout=30,
-    )
-    resp.raise_for_status()
+    for attempt in range(1, 6):
+        resp = requests.post(
+            f"{GEMINI_TEXT_URL}?key={GEMINI_API_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=30,
+        )
+        if resp.status_code == 429:
+            wait = 30 * attempt
+            log.warning("[Step1] 429 Too Many Requests — %d 秒後リトライ (attempt %d/5)", wait, attempt)
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        break
 
     raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
     # マークダウンコードブロックが混入した場合に除去
