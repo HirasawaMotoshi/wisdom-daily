@@ -47,7 +47,7 @@ HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_IMAGE_MODEL}"
 
 GEMINI_TEXT_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-1.5-flash:generateContent"
+    "gemini-2.0-flash:generateContent"
 )
 
 DOCS_DIR   = Path(__file__).parent / "docs" / "pins"
