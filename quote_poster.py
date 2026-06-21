@@ -435,10 +435,13 @@ def main(dry_run: bool = False) -> None:
     if not dry_run:
         git_commit_and_push(slug)
 
-        # Step 5: Pinterest 投稿
-        image_url = f"{GITHUB_PAGES_BASE}/pins/{slug}.jpg" if GITHUB_PAGES_BASE else ""
-        pin_id = post_to_pinterest(quote, author, page_url, image_url)
-        log.info("完了! pin_id=%s  page=%s", pin_id, page_url)
+        # Step 5: Pinterest 投稿（トークンが dummy でない場合のみ実行）
+        if PINTEREST_TOKEN and PINTEREST_TOKEN != "dummy":
+            image_url = f"{GITHUB_PAGES_BASE}/pins/{slug}.jpg" if GITHUB_PAGES_BASE else ""
+            pin_id = post_to_pinterest(quote, author, page_url, image_url)
+            log.info("完了! pin_id=%s  page=%s", pin_id, page_url)
+        else:
+            log.info("完了! (Pinterest スキップ中) page=%s", page_url)
     else:
         log.info("[dry-run] Pinterest 投稿と git push をスキップしました")
         log.info("[dry-run] page_url=%s", page_url)
