@@ -93,7 +93,7 @@ def generate_quote() -> dict[str, str]:
             "Content-Type": "application/json",
         },
         json={
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "model": "google/gemma-3-4b-it:free",
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=30,
