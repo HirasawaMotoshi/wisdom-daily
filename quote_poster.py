@@ -31,7 +31,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 # ── 環境変数 ────────────────────────────────────────────────────────────────
 
-GEMINI_API_KEY       = os.getenv("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
 HF_API_TOKEN         = os.getenv("HF_API_TOKEN", "")
 PINTEREST_TOKEN      = os.getenv("PINTEREST_ACCESS_TOKEN", "")
 PINTEREST_BOARD_ID   = os.getenv("PINTEREST_BOARD_ID", "")
@@ -45,10 +45,7 @@ HF_IMAGE_MODEL = os.getenv(
 )
 HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_IMAGE_MODEL}"
 
-GEMINI_TEXT_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:generateContent"
-)
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 DOCS_DIR   = Path(__file__).parent / "docs" / "pins"
 FONT_PATH  = Path(__file__).parent / "fonts" / "Inter-Bold.ttf"
@@ -66,15 +63,15 @@ log = logging.getLogger("quote_poster")
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 1 — Gemini で名言テキスト生成
+# Step 1 — OpenRouter で名言テキスト生成
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def generate_quote() -> dict[str, str]:
     """
-    Gemini Flash で英語の名言を1つ生成し、
+    OpenRouter (無料モデル) で英語の名言を1つ生成し、
     {"quote": "...", "author": "...", "image_prompt": "..."} を返す。
     """
-    log.info("[Step1] Gemini で名言を生成中…")
+    log.info("[Step1] OpenRouter で名言を生成中…")
 
     prompt = textwrap.dedent("""\
         Generate ONE original English motivational quote (under 20 words).
@@ -89,22 +86,21 @@ def generate_quote() -> dict[str, str]:
         }
     """)
 
-    for attempt in range(1, 6):
-        resp = requests.post(
-            f"{GEMINI_TEXT_URL}?key={GEMINI_API_KEY}",
-            headers={"Content-Type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=30,
-        )
-        if resp.status_code == 429:
-            wait = 30 * attempt
-            log.warning("[Step1] 429 Too Many Requests — %d 秒後リトライ (attempt %d/5)", wait, attempt)
-            time.sleep(wait)
-            continue
-        resp.raise_for_status()
-        break
+    resp = requests.post(
+        OPENROUTER_URL,
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
 
-    raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    raw = resp.json()["choices"][0]["message"]["content"].strip()
     # マークダウンコードブロックが混入した場合に除去
     raw = re.sub(r"^```[a-z]*\n?|```$", "", raw, flags=re.MULTILINE).strip()
 
