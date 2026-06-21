@@ -93,7 +93,7 @@ def generate_quote() -> dict[str, str]:
             "Content-Type": "application/json",
         },
         json={
-            "model": "deepseek/deepseek-r1-0528:free",
+            "model": "nex-agi/nex-n2-pro:free",
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=30,
