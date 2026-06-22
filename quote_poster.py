@@ -240,10 +240,6 @@ def composite_text(bg_bytes: bytes, quote: str, quote_ja: str, author: str) -> b
 
     y += 14
 
-    # 著者名
-    draw.text((margin + 2, y + 2), f"— {author}", font=author_font, fill=(0, 0, 0, 160))
-    draw.text((margin, y),         f"— {author}", font=author_font, fill=(220, 220, 220, 220))
-
     buf = io.BytesIO()
     img.convert("RGB").save(buf, format="JPEG", quality=92)
     log.info("[Step3] 合成完了 (%d bytes)", buf.tell())
@@ -318,7 +314,6 @@ _HTML_TEMPLATE = """\
     <img src="{image_url}" alt="Quote image" loading="lazy">
     <blockquote>&ldquo;{quote}&rdquo;</blockquote>
     <p class="quote-ja">{quote_ja}</p>
-    <cite>&mdash; {author}</cite>
     <p class="ts">Generated {timestamp}</p>
   </div>
 </body>
