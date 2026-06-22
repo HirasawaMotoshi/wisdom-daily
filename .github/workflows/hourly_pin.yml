@@ -31,19 +31,13 @@ jobs:
         run: pip install -r requirements-quote.txt
 
       # フォントが存在しない場合は Inter Bold をダウンロード
-      - name: Download font (if missing)
-        run: |
-          mkdir -p fonts
-          if [ ! -f fonts/Inter-Bold.ttf ]; then
-            curl -fsSL \
-              "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bslnt%2Cwght%5D.ttf" \
-              -o fonts/Inter-Bold.ttf || \
-            apt-get install -y fonts-dejavu-core 2>/dev/null || true
-          fi
+      - name: Install Japanese font
+        run: sudo apt-get install -y fonts-noto-cjk
 
       - name: Run quote poster
         env:
           OPENROUTER_API_KEY:        ${{ secrets.OPENROUTER_API_KEY }}
+          GROQ_API_KEY:              ${{ secrets.GROQ_API_KEY }}
           HF_API_TOKEN:              ${{ secrets.HF_API_TOKEN }}
           PINTEREST_ACCESS_TOKEN:    ${{ secrets.PINTEREST_ACCESS_TOKEN }}
           PINTEREST_BOARD_ID:        ${{ secrets.PINTEREST_BOARD_ID }}

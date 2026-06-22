@@ -32,6 +32,7 @@ load_dotenv(Path(__file__).parent / ".env")
 # ── 環境変数 ────────────────────────────────────────────────────────────────
 
 OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
+GROQ_API_KEY         = os.getenv("GROQ_API_KEY", "")
 HF_API_TOKEN         = os.getenv("HF_API_TOKEN", "")
 PINTEREST_TOKEN      = os.getenv("PINTEREST_ACCESS_TOKEN", "")
 PINTEREST_BOARD_ID   = os.getenv("PINTEREST_BOARD_ID", "")
@@ -46,6 +47,7 @@ HF_IMAGE_MODEL = os.getenv(
 HF_API_URL = f"https://router.huggingface.co/hf-inference/models/{HF_IMAGE_MODEL}"
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+GROQ_URL       = "https://api.groq.com/openai/v1/chat/completions"
 
 DOCS_DIR   = Path(__file__).parent / "docs" / "pins"
 FONT_PATH  = Path(__file__).parent / "fonts" / "Inter-Bold.ttf"
@@ -71,34 +73,39 @@ def generate_quote() -> dict[str, str]:
     OpenRouter (無料モデル) で英語の名言を1つ生成し、
     {"quote": "...", "author": "...", "image_prompt": "..."} を返す。
     """
-    log.info("[Step1] OpenRouter で名言を生成中…")
+    log.info("[Step1] Groq で名言を生成中…")
 
     prompt = textwrap.dedent("""\
         Generate ONE original English motivational quote (under 20 words).
+        Then translate it into natural Japanese.
         Then write a vivid cinematic image prompt (under 30 words) that visually
         represents the emotion of the quote — no text in the image.
 
         Respond ONLY with a JSON object, no markdown fences:
         {
-          "quote": "<the motivational quote>",
+          "quote": "<the motivational quote in English>",
+          "quote_ja": "<natural Japanese translation>",
           "author": "<real or fictional author name>",
           "image_prompt": "<stable diffusion prompt for the background image>"
         }
     """)
 
+    # Groq（無料・高速）で生成
     resp = requests.post(
-        OPENROUTER_URL,
+        GROQ_URL,
         headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json",
         },
         json={
-            "model": "nex-agi/nex-n2-pro:free",
+            "model": "llama-3.1-8b-instant",
             "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.9,
         },
         timeout=30,
     )
     resp.raise_for_status()
+    log.info("[Step1] Groq で生成完了")
 
     raw = resp.json()["choices"][0]["message"]["content"].strip()
     # マークダウンコードブロックが混入した場合に除去
@@ -161,8 +168,11 @@ def generate_background(image_prompt: str) -> bytes:
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     if FONT_PATH.exists():
         return ImageFont.truetype(str(FONT_PATH), size)
-    # フォールバック: システムフォント
+    # フォールバック: システムフォント（日本語対応のNotoを優先）
     for candidate in [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -172,8 +182,8 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def composite_text(bg_bytes: bytes, quote: str, author: str) -> bytes:
-    """背景画像の上に名言テキストを合成して PNG バイト列を返す。"""
+def composite_text(bg_bytes: bytes, quote: str, quote_ja: str, author: str) -> bytes:
+    """背景画像の上に名言（英語＋日本語）を合成して JPEG バイト列を返す。"""
     log.info("[Step3] テキストを合成中…")
 
     img = Image.open(io.BytesIO(bg_bytes)).convert("RGBA")
@@ -190,32 +200,49 @@ def composite_text(bg_bytes: bytes, quote: str, author: str) -> bytes:
     img = Image.alpha_composite(img, overlay)
     draw = ImageDraw.Draw(img)
 
-    # 名言テキスト（折り返し）
-    quote_font_size = max(36, W // 20)
-    author_font_size = max(24, W // 32)
+    quote_font_size  = max(32, W // 22)
+    ja_font_size     = max(26, W // 28)
+    author_font_size = max(22, W // 34)
     quote_font  = _load_font(quote_font_size)
+    ja_font     = _load_font(ja_font_size)
     author_font = _load_font(author_font_size)
-
-    # テキスト折り返し（最大 30 文字/行）
-    wrapped = textwrap.fill(f'"{quote}"', width=30)
-    lines = wrapped.split("\n")
-
-    line_h = quote_font_size + 10
-    total_text_h = line_h * len(lines) + author_font_size + 20
-    y_start = H - total_text_h - int(H * 0.08)
 
     margin = int(W * 0.07)
 
-    for i, line in enumerate(lines):
-        y = y_start + i * line_h
-        # 影
+    # 英語名言（折り返し）
+    wrapped_en = textwrap.fill(f'"{quote}"', width=30).split("\n")
+    line_h_en  = quote_font_size + 8
+
+    # 日本語訳（折り返し）
+    wrapped_ja = textwrap.fill(quote_ja, width=20).split("\n")
+    line_h_ja  = ja_font_size + 6
+
+    total_h = (line_h_en * len(wrapped_en)
+               + 10
+               + line_h_ja * len(wrapped_ja)
+               + 14
+               + author_font_size)
+    y = H - total_h - int(H * 0.07)
+
+    # 英語
+    for line in wrapped_en:
         draw.text((margin + 2, y + 2), line, font=quote_font, fill=(0, 0, 0, 180))
-        draw.text((margin, y), line, font=quote_font, fill=(255, 255, 255, 240))
+        draw.text((margin, y),         line, font=quote_font, fill=(255, 255, 255, 240))
+        y += line_h_en
+
+    y += 10
+
+    # 日本語訳（少し明るめのクリーム色）
+    for line in wrapped_ja:
+        draw.text((margin + 2, y + 2), line, font=ja_font, fill=(0, 0, 0, 160))
+        draw.text((margin, y),         line, font=ja_font, fill=(255, 240, 180, 230))
+        y += line_h_ja
+
+    y += 14
 
     # 著者名
-    author_y = y_start + len(lines) * line_h + 12
-    draw.text((margin + 2, author_y + 2), f"— {author}", font=author_font, fill=(0, 0, 0, 160))
-    draw.text((margin, author_y), f"— {author}", font=author_font, fill=(220, 220, 220, 220))
+    draw.text((margin + 2, y + 2), f"— {author}", font=author_font, fill=(0, 0, 0, 160))
+    draw.text((margin, y),         f"— {author}", font=author_font, fill=(220, 220, 220, 220))
 
     buf = io.BytesIO()
     img.convert("RGB").save(buf, format="JPEG", quality=92)
@@ -267,7 +294,13 @@ _HTML_TEMPLATE = """\
       line-height: 1.7;
       font-style: italic;
       color: #eee;
+      margin-bottom: 0.5rem;
+    }}
+    .quote-ja {{
+      font-size: clamp(0.95rem, 2.5vw, 1.25rem);
+      color: #f5d97a;
       margin-bottom: 1rem;
+      line-height: 1.8;
     }}
     cite {{
       font-size: 1rem;
@@ -284,6 +317,7 @@ _HTML_TEMPLATE = """\
   <div class="card">
     <img src="{image_url}" alt="Quote image" loading="lazy">
     <blockquote>&ldquo;{quote}&rdquo;</blockquote>
+    <p class="quote-ja">{quote_ja}</p>
     <cite>&mdash; {author}</cite>
     <p class="ts">Generated {timestamp}</p>
   </div>
@@ -295,6 +329,7 @@ _HTML_TEMPLATE = """\
 def build_cushion_page(
     slug: str,
     quote: str,
+    quote_ja: str,
     author: str,
     image_jpg_bytes: bytes,
 ) -> tuple[str, Path]:
@@ -322,6 +357,7 @@ def build_cushion_page(
 
     html = _HTML_TEMPLATE.format(
         quote=quote.replace('"', "&quot;"),
+        quote_ja=quote_ja,
         author=author,
         image_url=image_url,
         timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
@@ -417,6 +453,7 @@ def main(dry_run: bool = False) -> None:
     # Step 1: 名言生成
     quote_data    = generate_quote()
     quote         = quote_data["quote"]
+    quote_ja      = quote_data.get("quote_ja", "")
     author        = quote_data["author"]
     image_prompt  = quote_data["image_prompt"]
 
@@ -425,12 +462,12 @@ def main(dry_run: bool = False) -> None:
     (OUTPUT_DIR / f"{slug}_bg.jpg").write_bytes(bg_bytes)
 
     # Step 3: テキスト合成
-    final_jpg = composite_text(bg_bytes, quote, author)
+    final_jpg = composite_text(bg_bytes, quote, quote_ja, author)
     (OUTPUT_DIR / f"{slug}_final.jpg").write_bytes(final_jpg)
     log.info("[Step3] ローカル保存: output/quotes/%s_final.jpg", slug)
 
     # Step 4: クッションページ生成 & git push
-    page_url, _ = build_cushion_page(slug, quote, author, final_jpg)
+    page_url, _ = build_cushion_page(slug, quote, quote_ja, author, final_jpg)
 
     if not dry_run:
         git_commit_and_push(slug)
