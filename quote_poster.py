@@ -77,14 +77,19 @@ def generate_quote() -> dict[str, str]:
 
     prompt = textwrap.dedent("""\
         Generate ONE original English motivational quote (under 20 words).
-        Then translate it into natural Japanese.
+        Then translate it into natural, beautiful Japanese that a native Japanese speaker would say.
+        The Japanese translation must:
+        - Sound natural and poetic, not literal
+        - Use simple, everyday Japanese words
+        - Flow naturally as if originally written in Japanese
+        - NOT be a word-for-word translation
         Then write a vivid cinematic image prompt (under 30 words) that visually
         represents the emotion of the quote — no text in the image.
 
         Respond ONLY with a JSON object, no markdown fences:
         {
           "quote": "<the motivational quote in English>",
-          "quote_ja": "<natural Japanese translation>",
+          "quote_ja": "<natural, poetic Japanese translation>",
           "author": "<real or fictional author name>",
           "image_prompt": "<stable diffusion prompt for the background image>"
         }
